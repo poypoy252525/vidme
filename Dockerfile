@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
     gosu \
+    ffmpeg \
     && python -m pip install --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt gunicorn \
     && apt-get purge -y --auto-remove build-essential gcc \
