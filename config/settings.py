@@ -135,6 +135,8 @@ STATIC_ROOT = BASE_DIR / "static"
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / "media"
 
+FFMPEG_PATH = os.getenv('FFMPEG_PATH', 'ffmpeg')
+
 AUTH_USER_MODEL = 'user.User'
 
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')

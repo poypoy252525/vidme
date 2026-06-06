@@ -1,3 +1,4 @@
+import logging
 import os
 import subprocess
 from django.conf import settings
@@ -9,6 +10,8 @@ class Video(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     file = models.FileField(upload_to='videos/')
+
+    hls_manifest = models.FileField(upload_to='videos/hls/', blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -41,29 +44,43 @@ class Video(models.Model):
 
         source_path = self.file.path
         base_name, _ = os.path.splitext(os.path.basename(source_path))
-        output_dir = os.path.join(settings.MEDIA_ROOT, 'videos', 'converted')
+
+        # Example ffmpeg HLS generation command.
+        manifest_name = f"{base_name}.m3u8"
+        output_dir = os.path.join(settings.MEDIA_ROOT, 'videos', 'hls')
         os.makedirs(output_dir, exist_ok=True)
 
-        output_path = os.path.join(output_dir, f"{base_name}_converted.mp4")
+        manifest_path = os.path.join(output_dir, manifest_name)
+        segment_pattern = os.path.join(output_dir, f"{base_name}_%03d.ts")
 
-        # Example ffmpeg conversion command. Adjust codec, bitrate, and options as needed.
+        ffmpeg_path = getattr(settings, 'FFMPEG_PATH', 'ffmpeg')
         ffmpeg_command = [
-            'ffmpeg',
+            ffmpeg_path,
             '-i', source_path,
             '-c:v', 'libx264',
-            '-preset', 'medium',
-            '-crf', '23',
-            output_path,
+            '-c:a', 'aac',
+            '-strict', 'experimental',
+            '-hls_time', '10',
+            '-hls_playlist_type', 'vod',
+            '-hls_segment_filename', segment_pattern,
+            manifest_path,
         ]
 
         try:
-            subprocess.run(ffmpeg_command, check=True)
-        except (OSError, subprocess.CalledProcessError):
-            # If conversion fails, log or handle the failure as needed.
-            return
+            result = subprocess.run(ffmpeg_command, check=True, capture_output=True, text=True)
+        except FileNotFoundError as e:
+            raise RuntimeError(
+                f"FFmpeg executable not found at '{ffmpeg_path}'. Check your FFMPEG_PATH or system PATH."
+            ) from e
+        except subprocess.CalledProcessError as e:
+            error_text = e.stderr or e.stdout or str(e)
+            raise RuntimeError(
+                f"FFmpeg failed generating HLS for {base_name}: {error_text}"
+            ) from e
 
-        # At this point the converted file exists on disk.
-        # Add any additional steps here, such as saving a reference to the
-        # converted file in a separate model field or sending a notification.
-        return output_path
+        # Save the manifest field once the HLS generation succeeds.
+        self.hls_manifest.name = os.path.join('videos', 'hls', manifest_name).replace('\\', '/')
+        self.save(update_fields=['hls_manifest'])
+
+        return manifest_path
 

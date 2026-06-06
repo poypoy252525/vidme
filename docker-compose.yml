@@ -13,17 +13,44 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  celery:
+    build: .
+    restart: unless-stopped
+    command: celery -A config worker --loglevel=info --concurrency=4
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - static_data:/app/static
+      - media_data:/app/media
+    depends_on:
+      - db
+      - redis
+
   web:
     build: .
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - DB_HOST=db
       - DB_PORT=5432
       - DEBUG=False
       - ALLOWED_HOSTS=localhost,127.0.0.1
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
       - db
     volumes:
@@ -41,9 +68,6 @@ services:
       - media_data:/app/media:ro
     depends_on:
       - web
-    
-      
-
 
 volumes:
   postgres_data:

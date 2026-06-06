@@ -2,4 +2,7 @@ venv/
 db.sqlite3
 .env
 
+media/
+static/
+
 __pycache__/
