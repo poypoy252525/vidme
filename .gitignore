@@ -6,3 +6,4 @@ media/
 static/
 
 __pycache__/
+nginx/nginx.conf
